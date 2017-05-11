@@ -43,6 +43,12 @@ void printWordDec(char* word){
   }
   printf("%d\n", '\0');
 }
+
+void errorLog(char* msg){
+  fprintf(stderr, "Error appeared: %s\n", msg);
+  perror(msg);
+  exit(-1);
+}
 //---
 
 int isWordHere(char buf[BLOCK_TEXT_SIZE + 1]){
@@ -60,13 +66,20 @@ int isWordHere(char buf[BLOCK_TEXT_SIZE + 1]){
 }
 
 void* findWord(void* unused){
+  printf("Startuje wątek\n");
   char buf[BLOCK_SIZE];
   char text[BLOCK_TEXT_SIZE + 1];
   for(int i = 0; i < readRecords; i++){
-    read(filedes, buf, BLOCK_SIZE);
+    int read_res;
+    if( (read_res = read(filedes, buf, BLOCK_SIZE)) < 0)
+      errorLog("findWord");
+    if(read_res == 0)
+      return NULL;
+
+    printWordDec(buf);
     char* buf_ptr = buf;
     int block_id = (int) (buf_ptr);
-    buf_ptr += 4;            //TODO: tu coś zrobić!
+    buf_ptr += 4;
     strcpy(text, buf_ptr);
     text[BLOCK_TEXT_SIZE] = '\n';
     if(isWordHere(text)){
@@ -89,6 +102,8 @@ int main(int argc, char *argv[]) {
 
   //opening destination file
   filedes = open(filename, O_RDONLY);
+  if(filedes == -1)
+  errorLog("while opening file");
 
   //running threads
   pthread_t p_id;
