@@ -1,8 +1,9 @@
 #include "main.h"
 
 //Globals
-int filedes, readRecords;
+int filedes, readRecordsNo, threads;
 char* searched;
+pthread_t *threadIDs;
 //---
 
 //PARSER
@@ -14,7 +15,7 @@ int onlyDigits(const char* s){
   return 1;
 }
 
-void parse(int argc, char *argv[], int* threads, char* filename, int* readRecords, char* searched, int* version){
+void parse(int argc, char *argv[], int* threads, char* filename, int* readRecordsNo, char* searched, int* version){
   if(argc != 6){
     fprintf(stderr, "%s\n", "Invalid number of arguments");
     exit(-1);
@@ -29,19 +30,19 @@ void parse(int argc, char *argv[], int* threads, char* filename, int* readRecord
   }
 
   *threads = atoi(argv[1]);
-  *readRecords = atoi(argv[3]);
-  strcpy(filename, argv[2]);
-  strcpy(searched, argv[4]);
+  *readRecordsNo = atoi(argv[3]);
+  sprintf(filename,"%s", argv[2]);
+  sprintf(searched,"%s", argv[4]);
   *version = atoi(argv[5]);
 }
 
 void printWordDec(char* word){
   int i = 0;
   while(word[i] != '\0'){
-    printf("%d:", (char) word[i]);
+    printf("%d(%c):", (int) word[i], (char) word[i]);
     i++;
   }
-  printf("%d\n", '\0');
+  printf("(%d)\n", '\0');
 }
 
 void errorLog(char* msg){
@@ -51,14 +52,20 @@ void errorLog(char* msg){
 }
 //---
 
-int isWordHere(char buf[BLOCK_TEXT_SIZE + 1]){
-  for(int i = 0; i < BLOCK_TEXT_SIZE + 1 && buf[i] != '\0'; i++){
+void copy(char* dest, char* source, int n){
+  for(int i = 0; i < n; i++)
+    dest[i] = source[i];
+}
+
+int isWordHere(char *buf, int size){
+  for(int i = 0; i < size; i++){
     int j = i;
     int s_ind = 0;
-    while(buf[j] == searched[s_ind] && buf[j]){
+    printf("comparing: %c with %c\n", buf[j], searched[s_ind]);
+    while(buf[j] == searched[s_ind] && j < size){
       j++;
       s_ind++;
-      if(j > i && searched[s_ind] == '\0' && (buf[j] == ' ' || buf[j] == '\0'))
+      if(searched[s_ind] == '\0')
         return 1;
     }
   }
@@ -66,25 +73,36 @@ int isWordHere(char buf[BLOCK_TEXT_SIZE + 1]){
 }
 
 void* findWord(void* unused){
-  printf("Startuje wątek\n");
-  char buf[BLOCK_SIZE];
+  int realReadSize = BLOCK_SIZE * readRecordsNo;
+  printf("Thread starts...\n");
+  /*if(version == 1 || version == 3)*/pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+  char buf[realReadSize];
   char text[BLOCK_TEXT_SIZE + 1];
-  for(int i = 0; i < readRecords; i++){
+  while(1){
     int read_res;
-    if( (read_res = read(filedes, buf, BLOCK_SIZE)) < 0)
+    if( (read_res = read(filedes, buf, realReadSize)) < 0)
       errorLog("findWord");
     if(read_res == 0)
       return NULL;
-
-    printWordDec(buf);
-    char* buf_ptr = buf;
-    int block_id = (int) (buf_ptr);
-    buf_ptr += 4;
-    strcpy(text, buf_ptr);
-    text[BLOCK_TEXT_SIZE] = '\n';
-    if(isWordHere(text)){
-      printf("my id: %ld, id of block: %d\n", (long) pthread_self(), block_id);
+    for(int i = 0; i < readRecordsNo; i++){
+      char* buf_ptr = buf;
+      int block_id = (int) (*buf_ptr);
+      buf_ptr += 4;
+      copy(text, buf_ptr, BLOCK_TEXT_SIZE);
+      buf_ptr += BLOCK_TEXT_SIZE;
+      text[BLOCK_TEXT_SIZE] = '\0';
+      // printf("buf(%d): \n", block_id);
+      // printWordDec(text);
+      if(isWordHere(text, BLOCK_TEXT_SIZE + 1)){
+        printf("my id: %ld, id of block: %d\n", (long) pthread_self(), block_id);
+        for(int j = 0; j < threads; j++){
+          pthread_cancel(threadIDs[j]);
+        }
+        pthread_exit(NULL);
+      }
     }
+  pthread_exit(NULL);
+  return NULL;
   }
 }
 
@@ -93,23 +111,26 @@ void* findWord(void* unused){
 
 int main(int argc, char *argv[]) {
   //Parsing
-  int threads;
   char* filename = (char*) malloc(TEXT_MAXSIZE * sizeof(char));
   searched = (char*) malloc(TEXT_MAXSIZE * sizeof(char));
   int version;
-  parse(argc, argv, &threads, filename, &readRecords, searched, &version);
+  parse(argc, argv, &threads, filename, &readRecordsNo, searched, &version);
   //main program
 
   //opening destination file
   filedes = open(filename, O_RDONLY);
   if(filedes == -1)
-  errorLog("while opening file");
+    errorLog("while opening file");
 
   //running threads
-  pthread_t p_id;
+  threadIDs = malloc(threads * sizeof(pthread_t));
   for(int i = 0; i < threads; i++){
-    pthread_create(&p_id, NULL, &findWord, NULL);
+    if(pthread_create(&(threadIDs[i]), NULL, &findWord, NULL) != 0)
+      errorLog("while creating thread");
   }
+
+  for(int i=0; i < threads; i++)
+    pthread_join(threadIDs[i], NULL);
 
   close(filedes);
 
