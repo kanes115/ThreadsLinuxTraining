@@ -1,7 +1,7 @@
 #include "main.h"
 
 //Globals
-int filedes, readRecordsNo, threads;
+int filedes, readRecordsNo, threads, version;
 char* searched;
 pthread_t *threadIDs;
 //---
@@ -61,7 +61,6 @@ int isWordHere(char *buf, int size){
   for(int i = 0; i < size; i++){
     int j = i;
     int s_ind = 0;
-    printf("comparing: %c with %c\n", buf[j], searched[s_ind]);
     while(buf[j] == searched[s_ind] && j < size){
       j++;
       s_ind++;
@@ -72,38 +71,50 @@ int isWordHere(char *buf, int size){
   return 0;
 }
 
+void cancelAll(){
+  for(int j = 0; j < threads; j++){
+    pthread_cancel(threadIDs[j]);
+  }
+}
+
 void* findWord(void* unused){
   int realReadSize = BLOCK_SIZE * readRecordsNo;
-  printf("Thread starts...\n");
-  /*if(version == 1 || version == 3)*/pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+  if(version == 1)
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
   char buf[realReadSize];
-  char text[BLOCK_TEXT_SIZE + 1];
+  char text[BLOCK_TEXT_SIZE + 1];                     //+1 for that safety NULL
+
   while(1){
     int read_res;
     if( (read_res = read(filedes, buf, realReadSize)) < 0)
       errorLog("findWord");
     if(read_res == 0)
       return NULL;
+
+
+
+    char* buf_ptr = buf;
     for(int i = 0; i < readRecordsNo; i++){
-      char* buf_ptr = buf;
-      int block_id = (int) (*buf_ptr);
-      buf_ptr += 4;
+      pthread_testcancel();
+
+      int block_id = (int) (*buf_ptr);                //read int
+      buf_ptr += sizeof(int);
+
       copy(text, buf_ptr, BLOCK_TEXT_SIZE);
       buf_ptr += BLOCK_TEXT_SIZE;
-      text[BLOCK_TEXT_SIZE] = '\0';
-      // printf("buf(%d): \n", block_id);
-      // printWordDec(text);
+      text[BLOCK_TEXT_SIZE] = '\0';                   //safety NULL at the end
+
       if(isWordHere(text, BLOCK_TEXT_SIZE + 1)){
         printf("my id: %ld, id of block: %d\n", (long) pthread_self(), block_id);
-        for(int j = 0; j < threads; j++){
-          pthread_cancel(threadIDs[j]);
-        }
+        if(version != 3) cancelAll();
         pthread_exit(NULL);
       }
     }
+  }
   pthread_exit(NULL);
   return NULL;
-  }
 }
 
 
@@ -113,7 +124,6 @@ int main(int argc, char *argv[]) {
   //Parsing
   char* filename = (char*) malloc(TEXT_MAXSIZE * sizeof(char));
   searched = (char*) malloc(TEXT_MAXSIZE * sizeof(char));
-  int version;
   parse(argc, argv, &threads, filename, &readRecordsNo, searched, &version);
   //main program
 

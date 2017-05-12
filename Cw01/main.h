@@ -10,13 +10,6 @@
 int TEXT_MAXSIZE = 255;
 
 #define BLOCK_SIZE 1024
-#define BLOCK_TEXT_SIZE (BLOCK_SIZE - 4)
-
-
-struct block{
-  int id;
-  char text[BLOCK_TEXT_SIZE];
-};
-
+#define BLOCK_TEXT_SIZE (BLOCK_SIZE - sizeof(int))
 
 void printWordDec(char* word);
