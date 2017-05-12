@@ -53,3 +53,14 @@ Send signal to thread in which there is a handler for a signal defined.
 
 The situation here is similar. SIGUSR1 and SIGTERM has been caught in every
 thread and SIGKILL and SIGSTOP made the whole program stop.
+
+
+Ex 2)
+When a thread tries to catch SIGFPE it sets actual instruction aside and goes
+to the handler. If user does not exit or abort the program in a handler it will
+come back to this dividing to zero and again will get SIGFPE. If you use signal()
+it will mean the next time it gets SIGFPE it will be aborted, if you use
+sigaction(), then it will keep going on and on from main program to handler and back.
+
+Testing platform: PC computer with AMD Phenom II x4 (4 cores) and Xubuntu (Linux)
+Kernel version: 4.4.0-21-generic
