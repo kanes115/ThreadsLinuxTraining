@@ -1,0 +1,55 @@
+Tested signals:
+  - SIGUSR1
+  - SIGTERM
+  - SIGKILL
+  - SIGSTOP
+
+Ex a)
+
+Ex a.1)
+Send signal to the whole process, when it's not masked anywhere.
+
+SIGUSR1 - console logged "User defined signal 1"
+SIGTERM - console logged "Terminated"
+KILLED - console logged "Killed"
+SIGSTOP - it stopped the whole program including all its threads. We can
+conclude that because after resuming the process one of threads printed
+the information that it found a block containing searched word.
+
+We can conlude that threads get the same signals as the whole process.
+
+Ex a.2)
+Sending signal when the main thread has it masked (and threads has not).
+
+For signals SIGUSR1 and SIGTERM - process blocked them and so they have
+not reached threads - program executed normally.
+For the other two - they were not blocked (because these are the two that
+can't be blocked in Linux system) and so threads also got them. SIGKILL
+killed all threads and SIGSTOP stopped them (after resuming they gave the
+result)
+
+Ex a.3)
+Assumption was made that "all threads" includes the main thread:
+SIGUSR1, SIGTERM - These were caught in the main thread (checked equality
+between thread IDs got in main function and in handler).
+
+SIGKILL, SIGSTOP - of course were not caught because of their special role in
+system.
+
+When assumption was "all threads" means excluding the main one - no signal
+was caught.
+
+Ex a.4)
+Send signal to thread that has this signal blocked (in fact, to be able to know
+what happened, I send it to each thread, each thread had this signal blocked).
+
+SIGUSR1, SIGTERM - These signals were blocked.
+SIGKILL, SIGSTOP - these were not. Program stopped.
+
+We can conclude the situation for threads and process killing is th same.
+
+Ex a.5)
+Send signal to thread in which there is a handler for a signal defined.
+
+The situation here is similar. SIGUSR1 and SIGTERM has been caught in every
+thread and SIGKILL and SIGSTOP made the whole program stop.
