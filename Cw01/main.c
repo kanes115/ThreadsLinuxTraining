@@ -4,6 +4,8 @@
 int filedes, readRecordsNo, threads, version;
 char* searched;
 pthread_t *threadIDs;
+
+pthread_mutex_t mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
 //---
 
 //PARSER
@@ -78,6 +80,10 @@ void cancelAll(){
 }
 
 void* findWord(void* unused){
+
+  pthread_mutex_lock(&mutex);
+  pthread_mutex_unlock(&mutex);
+
   int realReadSize = BLOCK_SIZE * readRecordsNo;
 
   if(version == 1)
@@ -134,10 +140,12 @@ int main(int argc, char *argv[]) {
 
   //running threads
   threadIDs = malloc(threads * sizeof(pthread_t));
+  pthread_mutex_lock(&mutex);
   for(int i = 0; i < threads; i++){
     if(pthread_create(&(threadIDs[i]), NULL, &findWord, NULL) != 0)
       errorLog("while creating thread");
   }
+  pthread_mutex_unlock(&mutex);
 
   for(int i=0; i < threads; i++)
     pthread_join(threadIDs[i], NULL);
