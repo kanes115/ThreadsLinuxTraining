@@ -74,9 +74,14 @@ int isWordHere(char *buf, int size){
 }
 
 void cancelAll(){
+  int counter = 0;
   for(int j = 0; j < threads; j++){
-    pthread_cancel(threadIDs[j]);
+    if(pthread_equal(threadIDs[j], pthread_self()) == 0 && threadIDs[j] != 0){
+      pthread_cancel(threadIDs[j]);
+      counter++;
+    }
   }
+  pthread_exit(NULL);
 }
 
 void* findWord(void* unused){
@@ -86,8 +91,7 @@ void* findWord(void* unused){
 
   int realReadSize = BLOCK_SIZE * readRecordsNo;
 
-  if(version == 1)
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+  pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
   char buf[realReadSize];
   char text[BLOCK_TEXT_SIZE + 1];                     //+1 for that safety NULL
@@ -99,11 +103,12 @@ void* findWord(void* unused){
     if(read_res == 0)
       return NULL;
 
-
-
     char* buf_ptr = buf;
     for(int i = 0; i < readRecordsNo; i++){
-      pthread_testcancel();
+      if(buf_ptr[0] == EOF){
+        //printf("%ld finishing..\n", pthread_self());
+        return NULL;
+      }
 
       int block_id = (int) (*buf_ptr);                //read int
       buf_ptr += sizeof(int);
@@ -114,12 +119,11 @@ void* findWord(void* unused){
 
       if(isWordHere(text, BLOCK_TEXT_SIZE + 1)){
         printf("my id: %ld, id of block: %d\n", (long) pthread_self(), block_id);
-        if(version != 3) cancelAll();
-        pthread_exit(NULL);
+        //cancelAll();
+        return NULL;
       }
     }
   }
-  pthread_exit(NULL);
   return NULL;
 }
 
